@@ -1,0 +1,11 @@
+CC=gcc -c  -g
+LN=gcc -g
+
+#basedir .
+#basecmd $(CC)
+
+http_manager: %c
+	$(LN) -o http_manager %c
+
+clean:
+	rm -f *.o http_manager
