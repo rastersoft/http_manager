@@ -9,3 +9,10 @@ http_manager: %c
 
 clean:
 	rm -f *.o http_manager
+
+install:
+	cp http_manager /usr/bin
+	chmod 755 /usr/bin/http_manager
+
+copy:
+	cp *.c *.h Makefile ../../gentoo/bg_apps/http_manager
