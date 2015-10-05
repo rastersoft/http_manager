@@ -47,6 +47,8 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "http_manager.h"
 #include "http.h"
@@ -151,13 +153,9 @@ void run_external_program(struct http_petition *object,bool piping) {
 
 void get_program_result(struct http_petition *object, bool get_partial) {
 
-	char cadena2[8192];
-	int len;
 	int pid;
 	int retval, status;
 	struct Pipe_element *element_out, *element_err, *e;
-
-	char *data;
 
 	struct http_header_param *param;
 
@@ -336,7 +334,6 @@ void get_services(struct http_petition *object) {
 void accept_connection(int sockfd) {
 
 	struct http_petition *object;
-	char first;
 
 	debug(DEBUG_INFO, "Nueva conexion\n");
 	object=http_accept_connection(sockfd);
@@ -417,7 +414,7 @@ void do_loop() {
 		bzero((char *) &serv_addr, sizeof(serv_addr));
 		serv_addr.sin_family = AF_INET;
 		serv_addr.sin_port = htons(main_port);
-		serv_addr.sin_addr.s_addr = INADDR_ANY;
+		serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 		if (bind(pipe_list.fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 			perror("Can't bind socket\n");
 			close(pipe_list.fd);
@@ -469,11 +466,7 @@ int main(int argc, char **argv) {
 	struct sigaction term_action;
 	struct sigaction quit_action;
 	struct sigaction int_action;
-	struct sigaction hup_action;
 
-	set_debug_level(DEBUG_INFO);
-
-	time_val=2; // by default, refresh torrents once each two hours
 	main_port = 9089;
 	pipe_list.fd = 0; // default port
 	pipe_list.next = NULL;
@@ -486,7 +479,7 @@ int main(int argc, char **argv) {
 	for(loop=1;loop<argc;loop++) {
 
 		if (!strncmp(argv[loop],"-h",2)) { // help
-			printf("\n  HTTP_MANAGER 1.3\n\nUsage: http_manager [-h] [-Pport]\n\n");
+			printf("\n  HTTP_MANAGER 1.1\n\nUsage: http_manager [-h] [-Pport]\n\n");
 			printf("-h: shows this help.\n");
 			printf("-P port to get/set configuration (default 9089).\n");
 			exit(0);

@@ -1,4 +1,4 @@
-CC=gcc -c  -g
+CC=gcc -c  -g -Wall
 LN=gcc -g
 
 
