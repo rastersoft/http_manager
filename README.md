@@ -18,7 +18,7 @@ The idea behing http_manager is that web apps can use *xmlhttprequest()* to do s
 * **POST /run_program_with_pipes** works like the previous command, but will redirect both *stdout* and *stderr*, to make them
   available by using the *get_result* and *get_partial_result* commands.
 
-* **GET /get_result?pid=*pid* ** allows to get the status and (optionally) the output of a launched program. The *pid* parameters
+* **GET /get_result?pid=PID** allows to get the status and (optionally) the output of a launched program. The *PID* parameter
   must contain the value returned by *run_program* or *run_program_with_pipes*. It returns a JSON structure with four elements:
   
   * *running* if it is *true*, the program is still running; if it is *false*, the program ended
@@ -26,7 +26,7 @@ The idea behing http_manager is that web apps can use *xmlhttprequest()* to do s
   * *stdout* if the program ended, it will contain all the output made to the standard output by the program; if not, it will be empty
   * *stderr* if the program ended, it will contain all the output made to the error output by the program; if not, it will be empty
 
-* **GET /get_partial_result?pid=*pid* ** it works like *get_result*, but *stdout* and *stderr* will contain all the data generated
+* **GET /get_partial_result?pid=PID** it works like *get_result*, but *stdout* and *stderr* will contain all the data generated
   since the last *get_partial_result* executed (or since the begining, if none was executed). This allows to show the output of the
   program in realtime, instead of having to wait for it to end.
 
