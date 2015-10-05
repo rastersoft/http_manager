@@ -50,7 +50,7 @@
 
 #include "http_manager.h"
 #include "http.h"
-
+#include "debug.h"
 
 int time_val;
 int main_port;
@@ -85,6 +85,15 @@ struct Pipe_element * pipe_new(int fd, enum Pipe_types type) {
 	return object;
 }
 
+void pipe_reset_data(struct Pipe_element *object) {
+	if (object == NULL) {
+		return;
+	}
+	free(object->data);
+	object->data = NULL;
+	object->data_block_size = 0;
+	object->data_size = 0;
+}
 
 void pipe_delete(struct Pipe_element *object) {
 
@@ -105,7 +114,7 @@ void pipe_delete(struct Pipe_element *object) {
 	if (pipe_list_last == object) {
 		pipe_list_last = object->prev;
 	}
-	free(object->data);
+	pipe_reset_data(object);
 	free(object);
 	pipe_list_size--;
 	free(fds);
@@ -132,57 +141,74 @@ void term_handler_cb(int v) {
 void run_external_program(struct http_petition *object) {
 
 	char *cadena;
-	struct Pipe_element *pobject;
+	struct Pipe_element *pobject_out;
+	struct Pipe_element *pobject_err;
 	char cadena2[32];
-	int pipefd[2];
+	int pipefd_out[2];
+	int pipefd_err[2];
 	int pid;
 
 	bool piping = object->header[17]=='2';
 
 	if (piping) {
-		pipe(pipefd);
+		pipe(pipefd_out);
+		pipe(pipefd_err);
 	} else {
-		pipefd[0] = 0;
+		pipefd_out[0] = 0;
+		pipefd_err[0] = 0;
 	}
-	pobject = pipe_new(pipefd[0],PIPE_CHILD);
-	if (pobject == NULL) {
+	pobject_out = pipe_new(pipefd_out[0],PIPE_CHILD_STDOUT);
+	pobject_err = pipe_new(pipefd_err[0],PIPE_CHILD_STDERR);
+	if ((pobject_out == NULL) ||(pobject_err == NULL)) {
+		pipe_delete(pobject_out);
+		pipe_delete(pobject_err);
 		if (piping) {
-			close(pipefd[0]);
-			close(pipefd[1]);
+			close(pipefd_out[0]);
+			close(pipefd_out[1]);
+			close(pipefd_err[0]);
+			close(pipefd_err[1]);
 		}
 		http_send_header(object,500,"Not enought memory");
+		debug(DEBUG_ERROR,"Falta memoria para crear objetos PIPE externos\n");
 		return;
 	}
 
 	pid = fork();
 	if (pid == -1) {
-		pipe_delete(pobject);
+		pipe_delete(pobject_out);
+		pipe_delete(pobject_err);
 		if (piping) {
-			close(pipefd[0]);
-			close(pipefd[1]);
+			close(pipefd_out[0]);
+			close(pipefd_out[1]);
+			close(pipefd_err[0]);
+			close(pipefd_err[1]);
 		}
 		http_send_header(object,500,"Not enought memory");
+		debug(DEBUG_ERROR,"Falta memoria para crear un hijo\n");
 		return;
 	}
 	if (pid == 0) {
 		int retval;
 		if (piping) {
-			dup2(pipefd[1],1);
+			dup2(pipefd_out[1],1);
+			dup2(pipefd_err[1],2);
 		}
 		cadena=malloc(object->data_size+1);
 		memcpy(cadena,object->data,object->data_size);
 		*(cadena+object->data_size)=0;
 		retval = system(cadena);
 		free(cadena);
-		close(pipefd[1]);
+		close(pipefd_out[1]);
+		close(pipefd_err[1]);
 		exit(retval);
 	}
 
 	// parent
-	pobject->pid = pid;
+	pobject_out->pid = pid;
+	pobject_err->pid = pid;
 	http_send_header(object,200,"OK");
 	http_send_header_var(object,"Access-Control-Allow-Origin: *");
-	sprintf(cadena2,"{ \"pid\" : %d }",pobject->pid);
+	sprintf(cadena2,"{ \"pid\" : %d }",pid);
 	http_send_str(object,cadena2);
 	http_send_end(object);
 	http_free_petition(object);
@@ -196,7 +222,7 @@ void get_program_result(struct http_petition *object) {
 	int pid;
 	bool get_partial;
 	int retval, status;
-	struct Pipe_element *element;
+	struct Pipe_element *element_out,*element_err;
 
 	char *data;
 
@@ -208,33 +234,52 @@ void get_program_result(struct http_petition *object) {
 		get_partial = true;
 	}
 
-	printf("Pido pid: %d\n",pid);
-	element = NULL;
+	debug_int(DEBUG_INFO, "Pido PID %d\n",pid);
+	element_out = NULL;
+	element_err = NULL;
 	for(struct Pipe_element *e = pipe_list.next; e!= NULL; e=e->next) {
 		if (e->pid == pid) {
-			element = e;
-			break;
+			if (e->type == PIPE_CHILD_STDOUT) {
+				element_out = e;
+			} else if (e->type == PIPE_CHILD_STDERR) {
+				element_err = e;
+			}
+			if ((element_out != NULL) && (element_err != NULL)) {
+				break;
+			}
 		}
 	}
-	if (element != NULL) {
+	if (element_out != NULL) {
 		http_send_header(object,200,"OK");
 		http_send_header_var(object,"Content-Type: text/plain; charset=UTF-8");
 		/* Esta entrada es necesaria para que funcione XMLHttpRequest */
 		http_send_header_var(object,"Access-Control-Allow-Origin: *");
 		status = waitpid(pid,&retval,WNOHANG);
 		char cadena[2048];
-		sprintf(cadena,"{ \"running\" : %s,\n\"retval\" : %d,\n\"data\" : \"",status <= 0 ? "true" : "false",retval);
+		sprintf(cadena,"{ \"running\" : %s,\n\"retval\" : %d,\n\"stdout\" : \"",status <= 0 ? "true" : "false",retval);
 		http_send_str(object,cadena);
 		if ((status > 0) || (get_partial)) {
-			if (element->data != NULL) {
-				http_send_data(object,element->data,element->data_size);
+			if (element_out->data != NULL) {
+				http_send_data(object,element_out->data,element_out->data_size);
+			}
+		}
+		http_send_str(object,"\",\n\"stderr\" : \"");
+		if ((status > 0) || (get_partial)) {
+			if (element_err->data != NULL) {
+				http_send_data(object,element_err->data,element_err->data_size);
 			}
 		}
 		http_send_str(object,"\"}");
 		if (status > 0) {
-			element->to_delete = true;
+			element_out->to_delete = true;
+			element_err->to_delete = true;
+		}
+		if (get_partial) {
+			pipe_reset_data(element_out);
+			pipe_reset_data(element_err);
 		}
 	} else {
+		debug(DEBUG_ERROR, "Pido PID no valido\n");
 		http_send_header(object,503,"PID not valid");
 	}
 
@@ -356,10 +401,10 @@ void accept_connection(int sockfd) {
 	struct http_petition *object;
 	char first;
 
-	printf("Nueva conexion\n");
+	debug(DEBUG_INFO, "Nueva conexion\n");
 	object=http_accept_connection(sockfd);
 	if (object==NULL) {
-		printf("Error while accepting a connection\n");
+		debug(DEBUG_ERROR, "Fallo al abrir la conexion\n");
 		return;
 	}
 	if (object->error==0) {
@@ -372,11 +417,19 @@ void accept_connection(int sockfd) {
 		} else if (0==strncmp("GET /get_services",object->header,17)) {
 			get_services(object);
 		} else {
+			http_send_header(object,501,"COMMAND NOT VALID");
+			http_send_header_var(object,"Content-Type: text/plain; charset=UTF-8");
+			/* Esta entrada es necesaria para que funcione XMLHttpRequest */
+			http_send_header_var(object,"Access-Control-Allow-Origin: *");
 			http_send_end(object);
 			http_free_petition(object);
 		}
 	} else {
-		printf("Error al aceptar conexion %d\n",object->error);
+		debug_int(DEBUG_ERROR, "Error al aceptar la conexion\n",object->error);
+		http_send_header(object,500,"INTERNAL ERROR");
+		http_send_header_var(object,"Content-Type: text/plain; charset=UTF-8");
+		/* Esta entrada es necesaria para que funcione XMLHttpRequest */
+		http_send_header_var(object,"Access-Control-Allow-Origin: *");
 		http_send_end(object);
 		http_free_petition(object);
 	}
@@ -388,8 +441,10 @@ void read_data(struct Pipe_element *object) {
 	char buffer[8192];
 
 	size = read(object->fd,buffer,8192);
+	debug_int(DEBUG_INFO, "Leidos %d bytes\n",size);
 	printf("Leido %d datos\n",size);
 	if (size <= 0) {
+		debug(DEBUG_ERROR, "Error al leer datos\n");
 		return;
 	}
 	if (object->data == NULL) {
@@ -413,8 +468,8 @@ void do_loop() {
 
 	pipe_list.fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (pipe_list.fd < 0) {
-		printf("Can't create socket\n");
-		pipe_list.fd=0;
+		debug(DEBUG_CRITICAL, "Error al crear el socket inicial\n");
+		exit(-1);
 	} else {
 		bzero((char *) &serv_addr, sizeof(serv_addr));
 		serv_addr.sin_family = AF_INET;
@@ -474,7 +529,7 @@ int main(int argc, char **argv) {
 	struct sigaction hup_action;
 
 	time_val=2; // by default, refresh torrents once each two hours
-	main_port = 9088;
+	main_port = 9089;
 	pipe_list.fd = 0; // default port
 	pipe_list.next = NULL;
 	pipe_list.prev = NULL;
@@ -486,7 +541,7 @@ int main(int argc, char **argv) {
 	for(loop=1;loop<argc;loop++) {
 
 		if (!strncmp(argv[loop],"-h",2)) { // help
-			printf("\n  SERIES_RSS 1.3\n\nUsage: series_rss [-h] [-Afile] [-Pport] [-Itime_interval] [-Cconfig_file] [-Ttorrents_folder] [-Ddownloaded_list_file]\n\n");
+			printf("\n  HTTP_MANAGER 1.3\n\nUsage: http_manager [-h] [-Pport]\n\n");
 			printf("-h: shows this help.\n");
 			printf("-P port to get/set configuration (default 9089).\n");
 			exit(0);
@@ -521,6 +576,4 @@ int main(int argc, char **argv) {
 	do_loop();
 
 	return 0;
-
 }
-
