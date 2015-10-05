@@ -191,14 +191,14 @@ void get_program_result(struct http_petition *object, bool get_partial) {
 		http_send_header_var(object,"Access-Control-Allow-Origin: *");
 		status = waitpid(pid,&retval,WNOHANG);
 		char cadena[2048];
-		sprintf(cadena,"{ \"running\" : %s,\n\"retval\" : %d,\n\"stdout\" : \"",status <= 0 ? "true" : "false",retval);
+		sprintf(cadena,"{ \"running\" : %s, \"retval\" : %d, \"stdout\" : \"",status <= 0 ? "true" : "false",retval);
 		http_send_str(object,cadena);
 		if ((status > 0) || (get_partial)) {
 			if (element_out->data != NULL) {
 				http_send_data(object,element_out->data,element_out->data_size);
 			}
 		}
-		http_send_str(object,"\",\n\"stderr\" : \"");
+		http_send_str(object,"\", \"stderr\" : \"");
 		if ((status > 0) || (get_partial)) {
 			if (element_err->data != NULL) {
 				http_send_data(object,element_err->data,element_err->data_size);
