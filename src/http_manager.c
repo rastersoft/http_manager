@@ -74,7 +74,7 @@ void term_handler_cb(int v) {
 	do_exit=1;
 }
 
-void run_external_program(struct http_petition *object) {
+void run_external_program(struct http_petition *object,bool piping) {
 
 	char *cadena;
 	struct Pipe_element *pobject_out;
@@ -83,8 +83,6 @@ void run_external_program(struct http_petition *object) {
 	int pipefd_out[2];
 	int pipefd_err[2];
 	int pid;
-
-	bool piping = object->header[17]=='2';
 
 	if (piping) {
 		pipe(pipefd_out);
@@ -151,23 +149,26 @@ void run_external_program(struct http_petition *object) {
 }
 
 
-void get_program_result(struct http_petition *object) {
+void get_program_result(struct http_petition *object, bool get_partial) {
 
 	char cadena2[8192];
 	int len;
 	int pid;
-	bool get_partial;
 	int retval, status;
 	struct Pipe_element *element_out, *element_err, *e;
 
 	char *data;
 
-	if (object->header[15] == '_') {
-		pid = atoi(object->header+16);
-		get_partial = false;
-	} else {
-		pid = atoi(object->header+17);
-		get_partial = true;
+	struct http_header_param *param;
+
+	pid = -1;
+	for (param = object->header_params; param!= NULL; param = param->next) {
+		if (0 == strcmp(param->key,"pid")) {
+			if (param->value != NULL) {
+				pid = atoi(param->value);
+				break;
+			}
+		}
 	}
 
 	debug_int(DEBUG_INFO, "Pido PID %d\n",pid);
@@ -344,13 +345,19 @@ void accept_connection(int sockfd) {
 		return;
 	}
 	if (object->error==0) {
-		if (0==strncmp("POST /run_program",object->header,17)) {
-			run_external_program(object);
-		} else if (0==strncmp("GET /get_result",object->header,15)) {
-			get_program_result(object);
-		} else if (0==strncmp("POST /get_files",object->header,15)) {
+		debug_str(DEBUG_INFO,"Comando: %s\n",object->header_command);
+		debug_str(DEBUG_INFO,"Path: %s\n",object->header_path);
+		if (http_command_path_are(object,"POST", "/run_program")) {
+			run_external_program(object,false);
+		} else if (http_command_path_are(object,"POST", "/run_program_with_pipes")) {
+			run_external_program(object,true);
+		} else if (http_command_path_are(object,"GET","/get_result")) {
+			get_program_result(object,false);
+		} else if (http_command_path_are(object,"GET","/get_partial_result")) {
+			get_program_result(object,true);
+		} else if (http_command_path_are(object,"POST","/get_files")) {
 			get_files(object);
-		} else if (0==strncmp("GET /get_services",object->header,17)) {
+		} else if (http_command_path_are(object,"GET","/get_services")) {
 			get_services(object);
 		} else {
 			http_send_header(object,501,"COMMAND NOT VALID");
@@ -463,6 +470,8 @@ int main(int argc, char **argv) {
 	struct sigaction quit_action;
 	struct sigaction int_action;
 	struct sigaction hup_action;
+
+	set_debug_level(DEBUG_INFO);
 
 	time_val=2; // by default, refresh torrents once each two hours
 	main_port = 9089;

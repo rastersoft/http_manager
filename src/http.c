@@ -34,8 +34,20 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #include "http.h"
+
+bool http_command_path_are(struct http_petition *object,char *command, char *path) {
+
+	if (0 != strcmp(command,object->header_command)) {
+		return false;
+	}
+	if (0 != strcmp(path,object->header_path)) {
+		return false;
+	}
+	return true;
+}
 
 int http_receive_petition(int sockfd, struct http_petition *object) {
 
@@ -78,7 +90,90 @@ int http_receive_petition(int sockfd, struct http_petition *object) {
 			}
 		}
 	}
+	http_fill_header(object);
 	return 0;
+}
+
+void http_free_header_params(struct http_petition *object) {
+
+	if (object == NULL) {
+		return;
+	}
+
+	struct http_header_param *c,*n;
+	for(c=object->header_params;c != NULL; c = n) {
+		n = c->next;
+		free(c->key);
+		free(c->value);
+		free(c);
+	}
+	object->header_params = NULL;
+}
+
+char *add_header_param(struct http_petition *object,char *param_list) {
+
+	char *pointer,*pointer2;
+	struct http_header_param *param;
+
+	pointer = strchr(param_list,'&');
+	if (pointer != NULL) {
+		*pointer = 0;
+	}
+	param = (struct http_header_param *)malloc(sizeof(struct http_header_param));
+	if (param == NULL) {
+		return NULL;
+	}
+	bzero(param,sizeof(struct http_header_param));
+
+	pointer2 = strchr(param_list,'=');
+	if (pointer2 == NULL) { // no value
+		param->key = strdup(param_list);
+	} else {
+		*pointer2 = 0;
+		param->key = strdup(param_list);
+		param->value = strdup(pointer2 + 1);
+		*pointer2 = '=';
+	}
+	param->next = object->header_params;
+	object->header_params = param;
+	if (pointer != NULL) {
+		*pointer = '&';
+	}
+	return pointer;
+}
+
+void http_fill_header(struct http_petition *object) {
+
+	char *pointer1, *pointer2, *pointer3;
+
+	pointer1 = strchr(object->header,' ');
+	if (pointer1 == NULL) {
+		return;
+	}
+
+	pointer3 = strchr(pointer1 + 1,' ');
+	if (pointer3 != NULL) {
+		*pointer3 = 0;
+	}
+	free(object->header_command);
+	*pointer1 = 0;
+	object->header_command = strdup(object->header);
+	*pointer1 = ' ';
+
+	pointer2 = strchr(object->header,'?');
+	if (pointer2 == NULL) {
+		object->header_path = strdup(pointer1+1);
+	} else {
+		*pointer2 = 0;
+		object->header_path = strdup(pointer1+1);
+		*pointer2 = '?';
+		do {
+			pointer2 = add_header_param(object,pointer2 + 1);
+		} while(pointer2 != NULL);
+	}
+	if (pointer3 != NULL) {
+		*pointer3 = ' ';
+	}
 }
 
 void http_get_data(struct http_petition *object, char modify) {
@@ -187,17 +282,16 @@ void http_free_petition(struct http_petition *object) {
 		return;
 	}
 
-	if (object->session_id!=NULL) {
-		free(object->session_id);
-	}
+	free(object->session_id);
+	free(object->header);
+	free(object->userpass);
+	free(object->header_command);
+	free(object->header_path);
 
-	if (object->header!=NULL) {
-		free(object->header);
-	}
+	http_free_buffer(&object->header_buffer);
+	http_free_buffer(&object->data_buffer);
+	http_free_header_params(object);
 
-	if (object->userpass!=NULL) {
-		free(object->userpass);
-	}
 	free(object);
 }
 
@@ -273,6 +367,9 @@ void http_append_string(struct dinstr *object,char *string) {
 
 void http_free_buffer(struct dinstr *object) {
 
+	if (object == NULL) {
+		return;
+	}
 	free(object->buffer);
 	object->buffer=NULL;
 	object->size=0;

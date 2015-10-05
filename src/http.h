@@ -45,11 +45,20 @@ struct http_extra_data {
 	int data_size;
 };
 
+struct http_header_param {
+
+	char *key;
+	char *value;
+	struct http_header_param *next;
+};
+
 struct http_petition {
 
 	char *userpass;
 	char *data;
 	char *header;
+	char *header_command;
+	char *header_path;
 	char *session_id;
 	int error;
 	int http_error;
@@ -61,6 +70,7 @@ struct http_petition {
 	struct dinstr header_buffer;
 	struct dinstr data_buffer;
 	struct http_extra_data *extra;
+	struct http_header_param *header_params;
 };
 
 void http_connect(char *url, struct http_petition *);
@@ -77,5 +87,10 @@ struct http_petition *http_do_petition(char *url, struct http_extra_data *extra)
 void http_free_petition(struct http_petition *);
 
 char *http_tobase64(char *input);
+
+void http_free_buffer(struct dinstr *object);
+void http_fill_header(struct http_petition *object);
+
+bool http_command_path_are(struct http_petition *object,char *command, char *path);
 
 #endif /* HTTP_H_ */
