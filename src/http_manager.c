@@ -1,7 +1,7 @@
 /*
- * Copyright 2011-12 Raster Software Vigo
+ * Copyright 2011-15 Raster Software Vigo
  *
- * This file is part of series_rss
+ * This file is part of http_manager, derived from series_rss
  *
  * series_rss is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,9 +18,8 @@
  */
 
 /*
- * series_rss.c
+ * http_manager.c
  *
- *  Created on: 11/12/2011
  *      Author: raster (http://www.rastersoft.com)
  */
 
@@ -105,7 +104,7 @@ void run_external_program(struct http_petition *object,bool piping) {
 			close(pipefd_err[1]);
 		}
 		http_send_header(object,500,"Not enought memory");
-		debug(DEBUG_ERROR,"Falta memoria para crear objetos PIPE externos\n");
+		debug(DEBUG_ERROR,"Not enough memory for creating a new process in the system\n");
 		return;
 	}
 
@@ -120,7 +119,7 @@ void run_external_program(struct http_petition *object,bool piping) {
 			close(pipefd_err[1]);
 		}
 		http_send_header(object,500,"Not enought memory");
-		debug(DEBUG_ERROR,"Falta memoria para crear un hijo\n");
+		debug(DEBUG_ERROR,"Not enough memory for creating a child\n");
 		return;
 	}
 	if (pid == 0) {
@@ -132,6 +131,7 @@ void run_external_program(struct http_petition *object,bool piping) {
 		cadena=malloc(object->data_size+1);
 		memcpy(cadena,object->data,object->data_size);
 		*(cadena+object->data_size)=0;
+		debug_str(DEBUG_INFO,"Launching %s\n",cadena);
 		retval = system(cadena);
 		free(cadena);
 		close(pipefd_out[1]);
@@ -214,7 +214,7 @@ void get_program_result(struct http_petition *object, bool get_partial) {
 			pipe_reset_data(element_err);
 		}
 	} else {
-		debug(DEBUG_ERROR, "Pido PID no valido\n");
+		debug(DEBUG_ERROR, "Asking for not valid PID\n");
 		http_send_header(object,503,"PID not valid");
 	}
 
@@ -335,14 +335,14 @@ void accept_connection(int sockfd) {
 
 	struct http_petition *object;
 
-	debug(DEBUG_INFO, "Nueva conexion\n");
+	debug(DEBUG_INFO, "New conection\n");
 	object=http_accept_connection(sockfd);
 	if (object==NULL) {
-		debug(DEBUG_ERROR, "Fallo al abrir la conexion\n");
+		debug(DEBUG_ERROR, "Can't open a new conection\n");
 		return;
 	}
 	if (object->error==0) {
-		debug_str(DEBUG_INFO,"Comando: %s\n",object->header_command);
+		debug_str(DEBUG_INFO,"Command: %s\n",object->header_command);
 		debug_str(DEBUG_INFO,"Path: %s\n",object->header_path);
 		if (http_command_path_are(object,"POST", "/run_program")) {
 			run_external_program(object,false);
@@ -365,7 +365,7 @@ void accept_connection(int sockfd) {
 			http_free_petition(object);
 		}
 	} else {
-		debug_int(DEBUG_ERROR, "Error al aceptar la conexion\n",object->error);
+		debug_int(DEBUG_ERROR, "Error when accepting the conection\n",object->error);
 		http_send_header(object,500,"INTERNAL ERROR");
 		http_send_header_var(object,"Content-Type: text/plain; charset=UTF-8");
 		/* Esta entrada es necesaria para que funcione XMLHttpRequest */
@@ -381,10 +381,10 @@ void read_data(struct Pipe_element *object) {
 	char buffer[8192];
 
 	size = read(object->fd,buffer,8192);
-	debug_int(DEBUG_INFO, "Leidos %d bytes\n",size);
+	debug_int(DEBUG_INFO, "Read %d bytes\n",size);
 	printf("Leido %d datos\n",size);
 	if (size <= 0) {
-		debug(DEBUG_ERROR, "Error al leer datos\n");
+		debug(DEBUG_ERROR, "Error while reading data\n");
 		return;
 	}
 	if (object->data == NULL) {
@@ -408,7 +408,7 @@ void do_loop() {
 
 	pipe_list.fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (pipe_list.fd < 0) {
-		debug(DEBUG_CRITICAL, "Error al crear el socket inicial\n");
+		debug(DEBUG_CRITICAL, "Error while creating the main socket\n");
 		exit(-1);
 	} else {
 		bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -419,11 +419,13 @@ void do_loop() {
 			perror("Can't bind socket\n");
 			close(pipe_list.fd);
 			pipe_list.fd=0;
+			exit(-1);
 		} else {
 			if ( 0!= listen(pipe_list.fd,5)) {
 				printf("Can't listen on socket\n");
 				close(pipe_list.fd);
 				pipe_list.fd=0;
+				exit(-1);
 			}
 		}
 	}

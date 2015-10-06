@@ -14,6 +14,8 @@ The idea behing http_manager is that web apps can use *xmlhttprequest()* to do s
   to add *shell things* like redirections, pipes and so on.
   
   This command will return a JSON structure with a single element, named *pid*, with the pid number of the process launched.
+  
+  **IMPORTANT** It is mandatory for this and the next commands to work, to have a working */bin/sh* binary in the system.
 
 * **POST /run_program_with_pipes** works like the previous command, but will redirect both *stdout* and *stderr*, to make them
   available by using the *get_result* and *get_partial_result* commands.
