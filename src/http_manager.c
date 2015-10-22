@@ -134,8 +134,10 @@ void run_external_program(struct http_petition *object,bool piping) {
         debug_str(DEBUG_INFO,"Launching %s\n",cadena);
         retval = system(cadena);
         free(cadena);
-        close(pipefd_out[1]);
-        close(pipefd_err[1]);
+        if (piping) {
+            close(pipefd_out[1]);
+            close(pipefd_err[1]);
+        }
         exit(retval);
     }
 
@@ -388,15 +390,15 @@ void accept_connection(int sockfd) {
 
     struct http_petition *object;
 
-    debug(DEBUG_INFO, "New conection\n");
+    debug(DEBUG_DEBUG, "New conection\n");
     object=http_accept_connection(sockfd);
     if (object==NULL) {
         debug(DEBUG_ERROR, "Can't open a new conection\n");
         return;
     }
     if (object->error==0) {
-        debug_str(DEBUG_INFO,"Command: %s\n",object->header_command);
-        debug_str(DEBUG_INFO,"Path: %s\n",object->header_path);
+        debug_str(DEBUG_DEBUG,"Command: %s\n",object->header_command);
+        debug_str(DEBUG_DEBUG,"Path: %s\n",object->header_path);
         if (http_command_path_are(object,"POST", "/run_program")) {
             run_external_program(object,false);
         } else if (http_command_path_are(object,"POST", "/run_program_with_pipes")) {
@@ -434,7 +436,7 @@ void read_data(struct Pipe_element *object) {
     char buffer[8192];
 
     size = read(object->fd,buffer,8192);
-    debug_int(DEBUG_INFO, "Read %d bytes\n",size);
+    debug_int(DEBUG_DEBUG, "Read %d bytes\n",size);
     printf("Leido %d datos\n",size);
     if (size <= 0) {
         debug(DEBUG_ERROR, "Error while reading data\n");

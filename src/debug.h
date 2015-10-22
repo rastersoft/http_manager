@@ -27,7 +27,7 @@
 #ifndef SRC_DEBUG_H_
 #define SRC_DEBUG_H_
 
-enum DEBUG_MODE {DEBUG_INFO, DEBUG_WARNING, DEBUG_ERROR, DEBUG_CRITICAL};
+enum DEBUG_MODE {DEBUG_DEBUG, DEBUG_INFO, DEBUG_WARNING, DEBUG_ERROR, DEBUG_CRITICAL};
 
 void debug(enum DEBUG_MODE, char *msg);
 void debug_str(enum DEBUG_MODE, char *msg,char *string);
