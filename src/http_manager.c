@@ -167,7 +167,7 @@ void escape_data(struct Pipe_element *element) {
     
     for(loop=0,p=element->data; loop<element->data_size;loop++,p++) {
         c = *p;
-        if ((c == '"') || (c == '\n') || (c == '\r') || (c == '\t')) {
+        if ((c == '"') || (c == '\n') || (c == '\r') || (c == '\t') || (c == '\\')) {
             counter++;
         }
     }
@@ -198,6 +198,11 @@ void escape_data(struct Pipe_element *element) {
                 p--;
                 *p='\\';
             break;
+            case '\\':
+                *p = '\\';
+                p--;
+                *p='\\';
+            break;
             default:
                 *p = c;
             break;
@@ -205,6 +210,16 @@ void escape_data(struct Pipe_element *element) {
         }
         element->data_size+=counter;
     }
+}
+
+char *escape_string(char *data) {
+
+    struct Pipe_element element;
+
+    element.data = strdup(data);
+    element.data_size = 1 + strlen(data);
+    escape_data(&element);
+    return (element.data);
 }
 
 void get_program_result(struct http_petition *object, bool get_partial) {
@@ -284,7 +299,7 @@ void get_files(struct http_petition *object) {
 
     DIR *dlist;
     struct dirent *dent;
-    char *path,first,*path2,tmpstr[50];
+    char *path,first,*path2,*path_escaped,tmpstr[50];
     struct stat datos;
     int path_size,file_size;
 
@@ -330,7 +345,9 @@ void get_files(struct http_petition *object) {
                 }
                 first=1;
                 http_send_str(object,"{ filename:\"");
-                http_send_str(object,dent->d_name);
+                path_escaped = escape_string(dent->d_name);
+                http_send_str(object,path_escaped);
+                free(path_escaped);
                 sprintf(tmpstr,"\", date: %lld , isdir: %s}",(long long int)datos.st_mtime,(dent->d_type==DT_DIR) ? "true" : "false");
                 http_send_str(object,tmpstr);
                 free(path2);
@@ -465,28 +482,35 @@ void do_loop() {
     struct Pipe_element *e,*f;
     struct sockaddr_in serv_addr;
 
-    pipe_list.fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (pipe_list.fd < 0) {
-        debug(DEBUG_CRITICAL, "Error while creating the main socket\n");
-        exit(-1);
-    } else {
-        bzero((char *) &serv_addr, sizeof(serv_addr));
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(main_port);
-        serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-        if (bind(pipe_list.fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-            perror("Can't bind socket\n");
-            close(pipe_list.fd);
-            pipe_list.fd=0;
-            exit(-1);
+    c = 0;
+    while(1) {
+        pipe_list.fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (pipe_list.fd < 0) {
+            debug(DEBUG_CRITICAL, "Error while creating the main socket\n");
+            sleep(1);
+            continue;
         } else {
-            if ( 0!= listen(pipe_list.fd,5)) {
-                printf("Can't listen on socket\n");
+            bzero((char *) &serv_addr, sizeof(serv_addr));
+            serv_addr.sin_family = AF_INET;
+            serv_addr.sin_port = htons(main_port);
+            serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+            if (bind(pipe_list.fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+                perror("Can't bind socket\n");
                 close(pipe_list.fd);
                 pipe_list.fd=0;
-                exit(-1);
+                sleep(1);
+                continue;
+            } else {
+                if ( 0!= listen(pipe_list.fd,5)) {
+                    printf("Can't listen on socket\n");
+                    close(pipe_list.fd);
+                    pipe_list.fd=0;
+                    sleep(1);
+                    continue;
+                }
             }
         }
+        break;
     }
 
     while(!do_exit) {
