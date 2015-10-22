@@ -299,6 +299,7 @@ void get_files(struct http_petition *object) {
         memcpy(path,object->data,object->data_size);
         *(path+object->data_size)=0;
         path_size=object->data_size;
+        debug_str(DEBUG_INFO, "Asking for folder %s\n",path);
         dlist=opendir(path);
         if ((path_size==0) || (path[path_size-1]!='/')) {
             path[path_size]='/';
