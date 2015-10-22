@@ -162,7 +162,10 @@ void escape_data(struct Pipe_element *element) {
     char *p;
     char *q;
     char c;
-    for(p=element->data;*p!=0;p++) {
+    
+    counter = 0;
+    
+    for(loop=0,p=element->data; loop<element->data_size;loop++,p++) {
         c = *p;
         if ((c == '"') || (c == '\n') || (c == '\r') || (c == '\t')) {
             counter++;
