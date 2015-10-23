@@ -124,21 +124,21 @@ void run_external_program(struct http_petition *object,bool piping) {
     }
     if (pid == 0) {
         int retval;
-        if (piping) {
-            dup2(pipefd_out[1],1);
-            dup2(pipefd_err[1],2);
-        }
         cadena=malloc(object->data_size+1);
         memcpy(cadena,object->data,object->data_size);
         *(cadena+object->data_size)=0;
         debug_str(DEBUG_INFO,"Launching %s\n",cadena);
+        if (piping) {
+            dup2(pipefd_out[1],1);
+            dup2(pipefd_err[1],2);
+        }
         retval = system(cadena);
         free(cadena);
         if (piping) {
             close(pipefd_out[1]);
             close(pipefd_err[1]);
         }
-        exit(retval);
+        exit(WEXITSTATUS(retval));
     }
 
     // parent
@@ -193,6 +193,8 @@ void get_program_result(struct http_petition *object, bool get_partial) {
         http_send_header_var(object,"Access-Control-Allow-Origin: *");
         status = waitpid(pid,&retval,WNOHANG);
         char cadena[2048];
+        debug_int(DEBUG_INFO,"Return value: %d\n",retval);
+        retval = WEXITSTATUS(retval);
         sprintf(cadena,"{ \"running\" : %s, \"retval\" : %d, \"stdout\" : \"",status <= 0 ? "true" : "false",retval);
         http_send_str(object,cadena);
         if ((status > 0) || (get_partial)) {
@@ -393,7 +395,8 @@ void do_loop() {
     while(1) {
         pipe_list.fd = socket(AF_INET, SOCK_STREAM, 0);
         if (pipe_list.fd < 0) {
-            debug(DEBUG_CRITICAL, "Error while creating the main socket\n");
+            debug_int(DEBUG_CRITICAL, "Error while creating the main socket (%d)\n",c);
+            c++;
             sleep(1);
             continue;
         } else {
@@ -402,14 +405,16 @@ void do_loop() {
             serv_addr.sin_port = htons(main_port);
             serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
             if (bind(pipe_list.fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-                perror("Can't bind socket\n");
+                debug_int(DEBUG_CRITICAL, "Can't bind socket (%d)\n",c);
+                c++;
                 close(pipe_list.fd);
                 pipe_list.fd=0;
                 sleep(1);
                 continue;
             } else {
                 if ( 0!= listen(pipe_list.fd,5)) {
-                    printf("Can't listen on socket\n");
+                    debug_int(DEBUG_CRITICAL, "Can't listen on socket (%d)\n",c);
+                    c++;
                     close(pipe_list.fd);
                     pipe_list.fd=0;
                     sleep(1);
