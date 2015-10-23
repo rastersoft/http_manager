@@ -152,75 +152,6 @@ void run_external_program(struct http_petition *object,bool piping) {
     http_free_petition(object);
 }
 
-void escape_data(struct Pipe_element *element) {
-
-    if (element->data_size == 0) {
-        return;
-    }
-    int counter;
-    int loop;
-    char *p;
-    char *q;
-    char c;
-    
-    counter = 0;
-    
-    for(loop=0,p=element->data; loop<element->data_size;loop++,p++) {
-        c = *p;
-        if ((c == '"') || (c == '\n') || (c == '\r') || (c == '\t') || (c == '\\')) {
-            counter++;
-        }
-    }
-    if (counter != 0) {
-        element->data = realloc(element->data,element->data_size+counter);
-        p = element->data+element->data_size+counter-1;
-        q = element->data+element->data_size-1;
-        for(loop=0;loop<element->data_size;loop++,p--,q--) {
-            c = *q;
-            switch(c) {
-            case '"':
-                *p = '"';
-                p--;
-                *p='\\';
-            break;
-            case '\n':
-                *p = 'n';
-                p--;
-                *p='\\';
-            break;
-            case '\r':
-                *p = 'r';
-                p--;
-                *p='\\';
-            break;
-            case '\t':
-                *p = 't';
-                p--;
-                *p='\\';
-            break;
-            case '\\':
-                *p = '\\';
-                p--;
-                *p='\\';
-            break;
-            default:
-                *p = c;
-            break;
-            }
-        }
-        element->data_size+=counter;
-    }
-}
-
-char *escape_string(char *data) {
-
-    struct Pipe_element element;
-
-    element.data = strdup(data);
-    element.data_size = 1 + strlen(data);
-    escape_data(&element);
-    return (element.data);
-}
 
 void get_program_result(struct http_petition *object, bool get_partial) {
 
@@ -449,30 +380,6 @@ void accept_connection(int sockfd) {
         http_send_end(object);
         http_free_petition(object);
     }
-}
-
-void read_data(struct Pipe_element *object) {
-
-    int size;
-    char buffer[8192];
-
-    size = read(object->fd,buffer,8192);
-    debug_int(DEBUG_DEBUG, "Read %d bytes\n",size);
-    printf("Leido %d datos\n",size);
-    if (size <= 0) {
-        debug(DEBUG_ERROR, "Error while reading data\n");
-        return;
-    }
-    if (object->data == NULL) {
-        object->data = (char *)malloc(8192);
-        object->data_size = 0;
-        object->data_block_size = 8192;
-    } else if ((object->data_block_size - object->data_size) < size) {
-        object->data_block_size += 8192;
-        object->data = realloc(object->data,object->data_block_size);
-    }
-    memcpy(object->data+object->data_size,buffer,size);
-    object->data_size += size;
 }
 
 void do_loop() {

@@ -27,6 +27,8 @@
 #ifndef SRC_PROCESS_LIST_H_
 #define SRC_PROCESS_LIST_H_
 
+#define PAGE_SIZE 8192
+
 enum Pipe_types {PIPE_MASTER, PIPE_CHILD_STDOUT, PIPE_CHILD_STDERR};
 
 struct Pipe_element {
@@ -51,5 +53,8 @@ extern struct pollfd *fds;
 struct Pipe_element * pipe_new(int fd, enum Pipe_types type);
 void pipe_delete(struct Pipe_element *element);
 void pipe_reset_data(struct Pipe_element *element);
+void escape_data(struct Pipe_element *element);
+char *escape_string(char *data);
+void read_data(struct Pipe_element *object);
 
 #endif /* SRC_PROCESS_LIST_H_ */

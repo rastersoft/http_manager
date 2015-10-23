@@ -24,6 +24,6 @@ http.o: http.c http.h
 http_manager.o: http_manager.c process_list.h debug.h http.h http_manager.h
 	$(CC) -o http_manager.o http_manager.c
 
-process_list.o: process_list.c process_list.h
+process_list.o: process_list.c debug.h process_list.h
 	$(CC) -o process_list.o process_list.c
 
