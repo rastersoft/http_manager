@@ -39,7 +39,7 @@ The idea behing http_manager is that web apps can use *xmlhttprequest()* to do s
 ## CONTACTING THE AUTHOR ##
 
 Sergio Costas Rodriguez  
-http://www.rastersoft.com  
-raster@rastersoft.com  
 rastersoft@gmail.com  
+http://www.rastersoft.com  
+https://gitlab.com/rastersoft/http_manager
 
